@@ -1,0 +1,84 @@
+# Define the list of servers to check
+$servers = @(
+    "Server1",  # Replace with actual server names or IP addresses
+    "Server2",
+    "Server3"
+)
+
+# Define the services for OK and OO servers
+$okService = "HPOORASDhpooras"  # Service for OK servers
+$ooService = "HPOOCDhpoocenteral"  # Service for OO servers
+
+# Initialize results
+$results = @()
+
+# Function to check if a server is reachable
+function Test-ServerPing {
+    param (
+        [string]$Server
+    )
+    try {
+        Test-Connection -ComputerName $Server -Count 2 -Quiet
+    } catch {
+        $false
+    }
+}
+
+# Function to check if a service is running
+function Test-ServiceStatus {
+    param (
+        [string]$Server,
+        [string]$ServiceName
+    )
+    try {
+        $service = Get-Service -ComputerName $Server -Name $ServiceName -ErrorAction Stop
+        return $service.Status -eq "Running"
+    } catch {
+        return $false
+    }
+}
+
+# Begin health check
+foreach ($server in $servers) {
+    $serverStatus = @{ 
+        Server = $server
+        Reachable = $false
+        MainService = ""
+    }
+
+    # Check if the server is reachable
+    if (Test-ServerPing -Server $server) {
+        $serverStatus.Reachable = $true
+        Write-Host "Server $server is reachable." -ForegroundColor Green
+
+        # Check the OK service
+        Write-Host "Checking service '$okService' on server '$server'..."
+        if (Test-ServiceStatus -Server $server -ServiceName $okService) {
+            Write-Host "Service '$okService' is running on server '$server'." -ForegroundColor Green
+            $serverStatus.MainService = "OK: $okService"
+        } else {
+            Write-Host "Service '$okService' is NOT running on server '$server'." -ForegroundColor Red
+        }
+    } else {
+        Write-Host "Server $server is NOT reachable." -ForegroundColor Red
+
+        # Check the OO service
+        Write-Host "Checking service '$ooService' on server '$server'..."
+        if (Test-ServiceStatus -Server $server -ServiceName $ooService) {
+            Write-Host "Service '$ooService' is running on server '$server'." -ForegroundColor Green
+            $serverStatus.MainService = "OO: $ooService"
+        } else {
+            Write-Host "Service '$ooService' is NOT running on server '$server'." -ForegroundColor Red
+        }
+    }
+
+    $results += $serverStatus
+    Write-Host "-----------------------------------------------------"
+}
+
+# Summarize results
+Write-Host "`nSummary Report:`n" -ForegroundColor Cyan
+foreach ($result in $results) {
+    Write-Host "$($result.Server): $($result.MainService)" -ForegroundColor Yellow
+}
+
